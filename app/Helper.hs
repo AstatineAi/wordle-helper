@@ -52,31 +52,37 @@ toWordleState = foldl updateGuess initialState
 
     updateGuess :: WordleState -> Guess -> WordleState
     updateGuess state (word, colors) = foldl updateLetter state (zip3 word colors [0 .. 4])
-
-    -- Gray: set all positions to Incorrect
-    -- Yellow: set that specific position to Incorrect, others unchanged
-    -- Green: set that specific position to Correct, others unchanged
-    updateLetter :: WordleState -> (Char, Color, Int) -> WordleState
-    updateLetter state (c, color, pos)
-      | color == Green = M.adjust (setCorrect pos) c state
-      | color == Yellow = M.adjust (setIncorrect pos) c state
-      | color == Gray = M.adjust setAbsent c state
-      | otherwise = state
       where
-        setCorrect p positions =
-          updatePosition positions p Correct
-        setIncorrect p positions =
-          updatePosition positions p Incorrect
-        setAbsent _ =
-          (Incorrect, Incorrect, Incorrect, Incorrect, Incorrect)
+        activeLetters :: [Char]
+        activeLetters = [c | (c, color) <- zip word colors, color /= Gray]
 
-        updatePosition :: (Position, Position, Position, Position, Position) -> Int -> Position -> (Position, Position, Position, Position, Position)
-        updatePosition (_, p1, p2, p3, p4) 0 newPos = (newPos, p1, p2, p3, p4)
-        updatePosition (p0, _, p2, p3, p4) 1 newPos = (p0, newPos, p2, p3, p4)
-        updatePosition (p0, p1, _, p3, p4) 2 newPos = (p0, p1, newPos, p3, p4)
-        updatePosition (p0, p1, p2, _, p4) 3 newPos = (p0, p1, p2, newPos, p4)
-        updatePosition (p0, p1, p2, p3, _) 4 newPos = (p0, p1, p2, p3, newPos)
-        updatePosition tuple _ _ = tuple
+        -- Gray: set all positions to Incorrect
+        -- Yellow: set that specific position to Incorrect, others unchanged
+        -- Green: set that specific position to Correct, others unchanged
+        updateLetter :: WordleState -> (Char, Color, Int) -> WordleState
+        updateLetter s (c, color, pos)
+          | color == Green =
+              M.adjust (setCorrect pos) c $ M.map (setIncorrect pos) s
+          | color == Yellow =
+              M.adjust (setIncorrect pos) c s
+          | color == Gray =
+              if c `elem` activeLetters
+                then
+                  M.adjust (setIncorrect pos) c s
+                else
+                  M.adjust setAbsent c s
+          | otherwise = s
+    setCorrect p positions = updatePosition positions p Correct
+    setIncorrect p positions = updatePosition positions p Incorrect
+    setAbsent _ = (Incorrect, Incorrect, Incorrect, Incorrect, Incorrect)
+
+    updatePosition :: (Position, Position, Position, Position, Position) -> Int -> Position -> (Position, Position, Position, Position, Position)
+    updatePosition (_, p1, p2, p3, p4) 0 newPos = (newPos, p1, p2, p3, p4)
+    updatePosition (p0, _, p2, p3, p4) 1 newPos = (p0, newPos, p2, p3, p4)
+    updatePosition (p0, p1, _, p3, p4) 2 newPos = (p0, p1, newPos, p3, p4)
+    updatePosition (p0, p1, p2, _, p4) 3 newPos = (p0, p1, p2, newPos, p4)
+    updatePosition (p0, p1, p2, p3, _) 4 newPos = (p0, p1, p2, p3, newPos)
+    updatePosition tuple _ _ = tuple
 
 isPossibleWord :: WordleState -> String -> Bool
 isPossibleWord state word = all isPossibleLetter (zip word [0 .. 4])
