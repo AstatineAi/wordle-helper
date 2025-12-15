@@ -40,7 +40,7 @@ parseGuess s'
     isGuessChar c = isAlpha c || c == ':'
     (wordPart, colorPart) = span (/= ':') s
     word = map toLower wordPart
-    colors = map parseColor (tail colorPart)
+    colors = if null colorPart then [] else map parseColor (tail colorPart)
 
 -- WordleState contains states for each letter
 -- LetterState is a list of 5 Position, describing the status of that letter
