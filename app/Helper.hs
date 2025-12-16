@@ -2,14 +2,18 @@
 
 module Helper where
 
+import Control.Parallel.Strategies (parListChunk, rdeepseq, using)
 import Data.Char (isAlpha, toLower)
-import Data.List (elemIndex, sortOn)
+import Data.List (sortOn)
 import Data.Map.Strict qualified as M
 import Data.Maybe (mapMaybe)
+import Data.Ord (Down (..))
 
-data Color = Green | Yellow | Gray deriving (Eq, Show)
+data Color = Green | Yellow | Gray deriving (Eq, Show, Ord)
 
-type Guess = (String, [Color])
+type GuessColor = (Color, Color, Color, Color, Color)
+
+type Guess = (String, GuessColor)
 
 data Position = Correct | Incorrect | Unknown deriving (Eq, Show)
 
@@ -19,23 +23,23 @@ type LetterState = (Bool, (Position, Position, Position, Position, Position))
 
 type WordleState = M.Map Char LetterState
 
-getCharScore :: Char -> Int
-getCharScore c = case elemIndex c frequencyOrder of
-  Just idx -> 26 - idx
-  Nothing -> error $ "Character not found in frequency order: " ++ [c]
-  where
-    frequencyOrder = "etaoinshrdlcumwfgypbvkjxqz"
-
 parseColor :: Char -> Color
 parseColor 'g' = Green
 parseColor 'y' = Yellow
 parseColor _ = Gray
 
+colorsToList :: GuessColor -> [Color]
+colorsToList (c0, c1, c2, c3, c4) = [c0, c1, c2, c3, c4]
+
+listToColors :: [Color] -> GuessColor
+listToColors [c0, c1, c2, c3, c4] = (c0, c1, c2, c3, c4)
+listToColors _ = error "List must have exactly 5 colors"
+
 -- Pattern: apple:yyygg means guess "apple" and get results
 -- yellow, yellow, green, gray, gray
 parseGuess :: String -> Maybe Guess
 parseGuess s'
-  | length word == 5 && length colors == 5 = Just (word, colors)
+  | length word == 5 && length colors == 5 = Just (word, listToColors colors)
   | otherwise = Nothing
   where
     s = filter isGuessChar s'
@@ -53,10 +57,10 @@ toWordleState = foldl updateGuess initialState
     initialState = M.fromList [(c, (False, (Unknown, Unknown, Unknown, Unknown, Unknown))) | c <- ['a' .. 'z']]
 
     updateGuess :: WordleState -> Guess -> WordleState
-    updateGuess state (word, colors) = foldl updateLetter state (zip3 word colors [0 .. 4])
+    updateGuess state (word, colors) = foldl updateLetter state (zip3 word (colorsToList colors) [0 .. 4])
       where
         activeLetters :: [Char]
-        activeLetters = [c | (c, color) <- zip word colors, color /= Gray]
+        activeLetters = [c | (c, color) <- zip word (colorsToList colors), color /= Gray]
 
         -- Gray: set all positions to Incorrect
         -- Yellow: set that specific position to Incorrect, others unchanged
@@ -77,7 +81,7 @@ toWordleState = foldl updateGuess initialState
     setCorrect p (isPresent, positions) = (isPresent, updatePosition positions p Correct)
     setIncorrect p (isPresent, positions) = (isPresent, updatePosition positions p Incorrect)
     setAbsent _ = (False, (Incorrect, Incorrect, Incorrect, Incorrect, Incorrect))
-    setPresent ( _ , positions) = (True, positions)
+    setPresent (_, positions) = (True, positions)
 
     updatePosition :: (Position, Position, Position, Position, Position) -> Int -> Position -> (Position, Position, Position, Position, Position)
     updatePosition (_, p1, p2, p3, p4) 0 newPos = (newPos, p1, p2, p3, p4)
@@ -112,25 +116,40 @@ mustLetterPresent state c =
   maybe False fst (M.lookup c state)
 
 -- Best words: most likely to be the answer
--- New words: most likely to eliminate possibilities
-
-rateBestWord :: WordleState -> String -> Double
-rateBestWord = error "Not implemented"
-
-rateNewWord :: WordleState -> String -> Double
-rateNewWord = error "Not implemented"
-
+-- Suppose your word list is sorted by frequency of usage
 suggestBestWords :: [String] -> [String] -> [String]
-suggestBestWords rawGuesses possibleWords = take 10 $ sortOn (rateBestWord wordleState) possibleWords
+suggestBestWords rawGuesses universe = take 10 candidates
   where
     guesses = mapMaybe parseGuess rawGuesses
     wordleState = toWordleState guesses
+    candidates = filter (isPossibleWord wordleState) universe
 
+getGuess :: String -> String -> GuessColor
+getGuess word answer = listToColors colors
+  where
+    colors = [getColor w a | (w, a) <- zip word answer]
+    getColor w a
+      | w == a = Green
+      | w `elem` answer = Yellow
+      | otherwise = Gray
+
+calculateEntropy :: [String] -> String -> Double
+calculateEntropy candidates guess = sum [- (p * logBase 2 p) | p <- probabilities, p > 0]
+  where
+    total = fromIntegral (length candidates) :: Double
+    patternCounts = M.fromListWith (+) [(getGuess guess answer, 1 :: Int) | answer <- candidates]
+    probabilities = [fromIntegral count / total | count <- M.elems patternCounts]
+
+-- New words: most likely to eliminate possibilities
 suggestNewWords :: [String] -> [String] -> [String]
-suggestNewWords rawGuesses possibleWords = take 10 $ sortOn (rateNewWord wordleState) possibleWords
+suggestNewWords rawGuesses universe = map fst $ take 100 $ sortOn (Down . snd) results
   where
     guesses = mapMaybe parseGuess rawGuesses
     wordleState = toWordleState guesses
+    candidates = filter (isPossibleWord wordleState) universe
+    searchSpace = if length candidates < 50 then candidates else universe
+    calcTask = map (\word -> (word, calculateEntropy candidates word)) searchSpace
+    results = calcTask `using` parListChunk 50 rdeepseq
 
 filterWords :: [String] -> [String] -> [String]
 filterWords rawGuesses = filter (isPossibleWord state)

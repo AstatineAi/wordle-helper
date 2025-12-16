@@ -10,7 +10,7 @@ main = do
     ("filter" : guesses) -> do
       wordsList <- lines <$> readFile "words.txt"
       let possibleWords = filterWords guesses wordsList
-      mapM_ putStrLn possibleWords
+      putStrLn $ "There are " ++ show (length possibleWords) ++ " possible words."
     ("best" : guesses) -> do
       wordsList <- lines <$> readFile "words.txt"
       let suggestions = suggestBestWords guesses wordsList
