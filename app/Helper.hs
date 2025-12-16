@@ -13,7 +13,9 @@ type Guess = (String, [Color])
 
 data Position = Correct | Incorrect | Unknown deriving (Eq, Show)
 
-type LetterState = (Position, Position, Position, Position, Position)
+-- LetterState: (isPresentInWord, (pos0, pos1, pos2, pos3, pos4))
+-- TODO: Should count occurrences of letters in case of multiple same letters
+type LetterState = (Bool, (Position, Position, Position, Position, Position))
 
 type WordleState = M.Map Char LetterState
 
@@ -48,7 +50,7 @@ parseGuess s'
 toWordleState :: [Guess] -> WordleState
 toWordleState = foldl updateGuess initialState
   where
-    initialState = M.fromList [(c, (Unknown, Unknown, Unknown, Unknown, Unknown)) | c <- ['a' .. 'z']]
+    initialState = M.fromList [(c, (False, (Unknown, Unknown, Unknown, Unknown, Unknown))) | c <- ['a' .. 'z']]
 
     updateGuess :: WordleState -> Guess -> WordleState
     updateGuess state (word, colors) = foldl updateLetter state (zip3 word colors [0 .. 4])
@@ -62,9 +64,9 @@ toWordleState = foldl updateGuess initialState
         updateLetter :: WordleState -> (Char, Color, Int) -> WordleState
         updateLetter s (c, color, pos)
           | color == Green =
-              M.adjust (setCorrect pos) c $ M.map (setIncorrect pos) s
+              M.adjust setPresent c $ M.adjust (setCorrect pos) c $ M.map (setIncorrect pos) s
           | color == Yellow =
-              M.adjust (setIncorrect pos) c s
+              M.adjust setPresent c $ M.adjust (setIncorrect pos) c s
           | color == Gray =
               if c `elem` activeLetters
                 then
@@ -72,9 +74,10 @@ toWordleState = foldl updateGuess initialState
                 else
                   M.adjust setAbsent c s
           | otherwise = s
-    setCorrect p positions = updatePosition positions p Correct
-    setIncorrect p positions = updatePosition positions p Incorrect
-    setAbsent _ = (Incorrect, Incorrect, Incorrect, Incorrect, Incorrect)
+    setCorrect p (isPresent, positions) = (isPresent, updatePosition positions p Correct)
+    setIncorrect p (isPresent, positions) = (isPresent, updatePosition positions p Incorrect)
+    setAbsent _ = (False, (Incorrect, Incorrect, Incorrect, Incorrect, Incorrect))
+    setPresent ( _ , positions) = (True, positions)
 
     updatePosition :: (Position, Position, Position, Position, Position) -> Int -> Position -> (Position, Position, Position, Position, Position)
     updatePosition (_, p1, p2, p3, p4) 0 newPos = (newPos, p1, p2, p3, p4)
@@ -85,8 +88,9 @@ toWordleState = foldl updateGuess initialState
     updatePosition tuple _ _ = tuple
 
 isPossibleWord :: WordleState -> String -> Bool
-isPossibleWord state word = all isPossibleLetter (zip word [0 .. 4])
+isPossibleWord state word = all isPossibleLetter (zip word [0 .. 4]) && all (`elem` word) mustPresentLetters
   where
+    mustPresentLetters = [c | (c, _) <- M.toList state, mustLetterPresent state c]
     isPossibleLetter :: (Char, Int) -> Bool
     isPossibleLetter (c, pos) =
       case M.lookup c state of
@@ -94,7 +98,7 @@ isPossibleWord state word = all isPossibleLetter (zip word [0 .. 4])
         Nothing -> False
 
     isPositionPossible :: LetterState -> Int -> Bool
-    isPositionPossible (p0, p1, p2, p3, p4) position =
+    isPositionPossible (_, (p0, p1, p2, p3, p4)) position =
       case position of
         0 -> p0 /= Incorrect
         1 -> p1 /= Incorrect
@@ -102,6 +106,10 @@ isPossibleWord state word = all isPossibleLetter (zip word [0 .. 4])
         3 -> p3 /= Incorrect
         4 -> p4 /= Incorrect
         _ -> False
+
+mustLetterPresent :: WordleState -> Char -> Bool
+mustLetterPresent state c =
+  maybe False fst (M.lookup c state)
 
 -- Best words: most likely to be the answer
 -- New words: most likely to eliminate possibilities
