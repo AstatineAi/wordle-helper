@@ -1,0 +1,46 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set-up Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+    
+      # Ref: https://github.com/haskell-wasm/ghc-wasm-reflex-examples/blob/main/.github/workflows/build.yml
+      - name: Generate cabal plan.json
+        id: gen-plan-json
+        run: |
+          nix develop .#wasm --command bash -c 'wasm32-wasi-cabal update && wasm32-wasi-cabal build -f web --dry-run'
+
+      - name: Cabal cache
+        uses: actions/cache@v4
+        with:
+          key: build-${{ hashFiles('dist-newstyle/cache/plan.json') }}
+          restore-keys: build-
+          path: |
+            ~/.ghc-wasm/.cabal/store
+            dist-newstyle
+
+      
+      - name: Build with Nix
+        run: nix develop .#wasm --command bash build.sh
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./frontend/dist

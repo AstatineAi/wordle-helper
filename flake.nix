@@ -19,13 +19,18 @@
             containers
             parallel
           ]);
+          nodeEnv = with pkgs; [
+            nodejs
+            pnpm
+          ];
+          webEnv =  [
+            inputs.ghc-wasm-meta.packages.${system}.all_9_12
+            pkgs.gmp
+          ];
         in
         {
           devShells.wasm = pkgs.mkShell {
-            packages = [
-              inputs.ghc-wasm-meta.packages.${system}.all_9_12
-              pkgs.gmp
-            ];
+            packages = [ nodeEnv webEnv ];
           };
           devShells.native = pkgs.mkShell {
             packages = with pkgs; [
