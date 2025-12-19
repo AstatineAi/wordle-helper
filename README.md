@@ -16,8 +16,5 @@ Run the application with one of the following commands:
 - `best`: Suggests the word that most likely to be the correct answer.
 - `new`: Suggests new words likely to eliminate the most possibilities.
 
-Make sure to have a `words.txt` file in the same directory
-containing the list of valid words.
-
-e.g. [Knuth's GraphBase list of 5-letter words](
+`words.txt` is downloaded from [Knuth's GraphBase list of 5-letter words](
     https://cs.stanford.edu/~knuth/sgb-words.txt).
