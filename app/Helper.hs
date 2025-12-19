@@ -1,8 +1,11 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 
 module Helper where
 
+#ifndef WEB
 import Control.Parallel.Strategies (parListChunk, rdeepseq, using)
+#endif
 import Data.Char (isAlpha, toLower)
 import Data.List (sortOn)
 import Data.Map.Strict qualified as M
@@ -134,7 +137,7 @@ getGuess word answer = listToColors colors
       | otherwise = Gray
 
 calculateEntropy :: [String] -> String -> Double
-calculateEntropy candidates guess = sum [- (p * logBase 2 p) | p <- probabilities, p > 0]
+calculateEntropy candidates guess = sum [-(p * logBase 2 p) | p <- probabilities, p > 0]
   where
     total = fromIntegral (length candidates) :: Double
     patternCounts = M.fromListWith (+) [(getGuess guess answer, 1 :: Int) | answer <- candidates]
@@ -142,14 +145,18 @@ calculateEntropy candidates guess = sum [- (p * logBase 2 p) | p <- probabilitie
 
 -- New words: most likely to eliminate possibilities
 suggestNewWords :: [String] -> [String] -> [String]
-suggestNewWords rawGuesses universe = map fst $ take 100 $ sortOn (Down . snd) results
+suggestNewWords rawGuesses universe = map fst $ take 10 $ sortOn (Down . snd) results
   where
     guesses = mapMaybe parseGuess rawGuesses
     wordleState = toWordleState guesses
     candidates = filter (isPossibleWord wordleState) universe
     searchSpace = if length candidates < 50 then candidates else universe
     calcTask = map (\word -> (word, calculateEntropy candidates word)) searchSpace
+#ifdef WEB
+    results = calcTask
+#else
     results = calcTask `using` parListChunk 50 rdeepseq
+#endif
 
 filterWords :: [String] -> [String] -> [String]
 filterWords rawGuesses = filter (isPossibleWord state)

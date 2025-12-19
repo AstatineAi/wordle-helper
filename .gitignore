@@ -22,3 +22,6 @@ cabal.project.local~
 .HTF/
 .ghc.environment.*
 .direnv
+node_modules
+wordle-helper.wasm
+ghc_wasm_jsffi.js
