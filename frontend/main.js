@@ -2,6 +2,7 @@ import { WASI } from "@bjorn3/browser_wasi_shim";
 
 // UI Logic
 const grid = document.getElementById('grid');
+const keyboard = document.getElementById('keyboard');
 const rows = 6;
 const cols = 5;
 
@@ -20,6 +21,32 @@ for (let r = 0; r < rows; r++) {
     }
     grid.appendChild(rowDiv);
 }
+
+// Initialize Keyboard
+const keys = [
+  ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+  ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+  ['z', 'x', 'c', 'v', 'b', 'n', 'm', 'Backspace']
+];
+
+keys.forEach(rowKeys => {
+  const rowDiv = document.createElement('div');
+  rowDiv.className = 'keyboard-row';
+  rowKeys.forEach(key => {
+    const button = document.createElement('button');
+    button.textContent = key === 'Backspace' ? '⌫' : key;
+    button.className = key === 'Backspace' ? 'key wide' : 'key';
+    button.addEventListener('click', () => {
+      if (key === 'Backspace') {
+        removeLetter();
+      } else {
+        addLetter(key);
+      }
+    });
+    rowDiv.appendChild(button);
+  });
+  keyboard.appendChild(rowDiv);
+});
 
 function cycleColor(cell) {
     const colors = ['absent', 'present', 'correct'];
