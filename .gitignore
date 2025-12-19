@@ -23,5 +23,5 @@ cabal.project.local~
 .ghc.environment.*
 .direnv
 node_modules
-wordle-helper.wasm
-ghc_wasm_jsffi.js
+frontend/public/wordle-helper.wasm
+frontend/ghc_wasm_jsffi.js
