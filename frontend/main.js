@@ -120,7 +120,7 @@ async function initWasm() {
 
     try {
         const { instance } = await WebAssembly.instantiateStreaming(
-            fetch('/wordle-helper.wasm'), 
+            fetch(import.meta.env.BASE_URL + 'wordle-helper.wasm'), 
             wasmImports
         );
         
